@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Avatar</title>
+
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #222;
+}
+canvas {
+  display: block;
+}
+</style>
+</head>
+
+<body>
+
+<script type="module">
+
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+
+let scene = new THREE.Scene();
+scene.background = new THREE.Color(0x222222);
+
+let camera = new THREE.PerspectiveCamera(
+  50,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+
+let renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(1);
+document.body.appendChild(renderer.domElement);
+
+// Lights
+let ambient = new THREE.AmbientLight(0xffffff, 1);
+scene.add(ambient);
+
+let directional = new THREE.DirectionalLight(0xffffff, 2);
+directional.position.set(5, 10, 7);
+scene.add(directional);
+
+// Loader
+let loader = new GLTFLoader();
+
+loader.load(
+  './avatar.glb', // IMPORTANT: use ./ before filename
+  (gltf) => {
+
+    console.log("GLB Loaded Successfully");
+
+    let model = gltf.scene;
+    scene.add(model);
+
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    model.position.sub(center);
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    cameraZ *= 1.5;
+
+    camera.position.set(0, size.y * 0.5, cameraZ);
+    camera.lookAt(0, size.y * 0.5, 0);
+
+  },
+  undefined,
+  (error) => {
+    console.error("GLB Error:", error);
+  }
+);
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+</script>
+
+</body>
+</html>
