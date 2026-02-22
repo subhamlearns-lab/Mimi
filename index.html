@@ -3,107 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Avatar</title>
+    <title>3D Avatar Viewer</title>
     <style>
-        body { margin: 0; background: radial-gradient(circle, #333, #000); overflow: hidden; font-family: sans-serif; }
+        /* CSS: ক্লিন এবং রেসপনসিভ ইউআই */
+        body { margin: 0; background: radial-gradient(circle, #242424, #000000); overflow: hidden; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; }
-        
-        /* Loading UI */
-        #loader {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            color: white; font-weight: bold;
-            text-transform: uppercase; letter-spacing: 2px;
-            display: block;
+
+        /* লোডিং স্ক্রিন */
+        #loader-wrapper {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 1000;
         }
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid #333;
+            border-top: 4px solid #00d2ff; border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #percent { color: #00d2ff; font-size: 14px; margin-top: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="loader">Loading Avatar...</div>
+    <div id="loader-wrapper">
+        <div class="spinner"></div>
+        <div id="percent">0%</div>
+    </div>
 
 <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
     import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
     import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 
-    // --- Scene Setup ---
+    // --- ১. সিন এবং ক্যামেরা সেটআপ ---
     const scene = new THREE.Scene();
 
-    // --- Camera Setup (Best Angle Logic) ---
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 1.5, 4); // Standard Hero Angle
-
-    // --- Renderer Setup ---
+    
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true; // Shadows for realism
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     document.body.appendChild(renderer.domElement);
 
-    // --- Orbit Controls (Physics-like smoothness) ---
+    // --- ২. কন্ট্রোলস (স্মুথ ফিজিক্স লজিক) ---
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; // স্মুথ মুভমেন্ট
+    controls.enableDamping = true; // মাউস ছাড়ার পর স্মুথ মুভমেন্ট
     controls.dampingFactor = 0.05;
-    controls.minDistance = 2;
-    controls.maxDistance = 10;
-    controls.target.set(0, 1, 0);
+    controls.maxDistance = 15;
+    controls.minDistance = 1;
 
-    // --- Lighting (Studio Setup) ---
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-    scene.add(ambientLight);
+    // --- ৩. লাইটিং (সিনেমাটিক স্টুডিও লাইট) ---
+    const ambient = new THREE.AmbientLight(0xffffff, 1.0);
+    scene.add(ambient);
 
-    const spotLight = new THREE.DirectionalLight(0xffffff, 2);
-    spotLight.position.set(5, 10, 7.5);
-    spotLight.castShadow = true;
-    scene.add(spotLight);
+    const frontLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    frontLight.position.set(2, 5, 5);
+    scene.add(frontLight);
 
-    // --- Load Avatar ---
+    const backLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    backLight.position.set(-2, 5, -5);
+    scene.add(backLight);
+
+    // --- ৪. মডেল লোডিং এবং অটো-অ্যাডজাস্টমেন্ট ---
     const loader = new GLTFLoader();
-    const modelPath = './avatar.glb'; // আপনার ফাইলের নাম নিশ্চিত করুন
+    const percentTxt = document.getElementById('percent');
 
-    loader.load(
-        modelPath,
+    loader.load('./avatar.glb', 
         (gltf) => {
             const model = gltf.scene;
             
-            // অটো-সেন্টারিং লজিক
+            // অটো-ফোকাস লজিক: মডেলটি যত বড়ই হোক সেটি স্ক্রিনের মাঝখানে আসবে
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+
             model.position.x += (model.position.x - center.x);
             model.position.z += (model.position.z - center.z);
-            model.position.y = 0; // পায়ের নিচ গ্রাউন্ডে রাখা
+            model.position.y = -box.min.y; // মডেলটিকে মাটির উপরে রাখা
 
             scene.add(model);
-            document.getElementById('loader').style.display = 'none';
 
-            // মডেল এনিমেশন (Slow Auto-rotate)
-            const mixer = new THREE.AnimationMixer(model);
-            if (gltf.animations.length > 0) {
-                const action = mixer.clipAction(gltf.animations[0]);
-                action.play();
-            }
+            // সেরা ক্যামেরা অ্যাঙ্গেল ক্যালকুলেশন
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const fov = camera.fov * (Math.PI / 180);
+            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+            cameraZ *= 2.5; // অ্যাভাটার থেকে নিরাপদ দূরত্ব
+
+            camera.position.set(0, size.y / 1.5, cameraZ);
+            controls.target.set(0, size.y / 1.5, 0);
+            controls.update();
+
+            // লোডিং শেষ হলে স্ক্রিন সরিয়ে ফেলা
+            document.getElementById('loader-wrapper').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('loader-wrapper').style.display = 'none';
+            }, 500);
         },
         (xhr) => {
-            const percent = Math.round((xhr.loaded / xhr.total) * 100);
-            document.getElementById('loader').innerText = `Loading: ${percent}%`;
+            const p = Math.round((xhr.loaded / xhr.total) * 100);
+            percentTxt.innerText = p + '%';
         },
-        (error) => {
-            console.error('Error loading GLB:', error);
-            document.getElementById('loader').innerText = 'Failed to load avatar.glb';
+        (err) => {
+            console.error("Error Loading avatar.glb:", err);
+            percentTxt.innerText = "Error: avatar.glb not found!";
+            percentTxt.style.color = "red";
         }
     );
 
-    // --- Animation Loop ---
+    // --- ৫. রেন্ডার লুপ ---
     function animate() {
         requestAnimationFrame(animate);
-        controls.update(); // Damping এর জন্য প্রয়োজন
+        controls.update(); // ড্যাম্পিং এফেক্ট এর জন্য জরুরি
         renderer.render(scene, camera);
     }
     animate();
 
-    // --- Handle Window Resize ---
+    // উইন্ডো সাইজ পরিবর্তন হ্যান্ডেল করা
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
